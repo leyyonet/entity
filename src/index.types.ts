@@ -1,13 +1,29 @@
 // noinspection JSUnusedGlobalSymbols
 
-export type IdBase = string | number;
+export type ID = string | number;
 export type DefId = string;
+/**
+ * Given id type
+ * Generics:
+ * - I: Id type
+ * */
+export type GivenId<I extends ID = DefId> = I|Partial<EntityIdLike<I>>;
+/**
+ * Given ids type
+ * @see {@link GivenId}
+ * */
+export type GivenIds<I extends ID = DefId> = Array<GivenId<I>>;
+
+export type NAME = string | Record<string, string>;
+export type DefName = string;
 export type XX = unknown;
 
 /**
- * Base entity with only id property
+ * Simple entity interface
+ * Generics:
+ * - I: Id type
  * */
-export interface BaseId<I extends IdBase = DefId> extends Record<string, unknown> {
+export interface EntityIdLike<I extends ID = DefId> extends Record<string, unknown> {
     /**
      * Identifier of entity
      * */
@@ -17,18 +33,23 @@ export interface BaseId<I extends IdBase = DefId> extends Record<string, unknown
 }
 
 /**
- * Base entity with system properties
+ * Entity interface
+ * Generics:
+ * - I: Id type
+ * - N: Name type
  * */
-export interface BaseEntity<I extends IdBase = DefId, N = string> extends BaseId<I> {
+export interface EntityLike<I extends ID = DefId, N extends NAME = DefName> extends EntityIdLike<I> {
     /**
      * Name of record, it can be string or I18n string {en:"Apple", de:"Apfel"}
      * */
     name?: N;
 }
 /**
- * Base pair as id and name properties
+ * Pair interface
+ * Generics:
+ * - I: Id type
  * */
-export interface BasePair<I extends IdBase = DefId> extends BaseId<I> {
+export interface PairLike<I extends ID = DefId> extends EntityIdLike<I> {
     /**
      * Name of entity, it should be string
      * If original name is I18n of entity, it should be transformed to plain way
@@ -36,9 +57,12 @@ export interface BasePair<I extends IdBase = DefId> extends BaseId<I> {
     name?: string;
 }
 /**
- * Base entity with system properties
+ * Entity interface with system properties
+ * Generics:
+ * - I: Id type
+ * - N: Name type
  * */
-export interface BaseRichEntity<I extends IdBase = DefId, N = string> extends BaseEntity<I, N> {
+export interface RichEntityLike<I extends ID = DefId, N extends NAME = DefName> extends EntityLike<I, N> {
     /**
      * Creation time
      * */
@@ -84,15 +108,14 @@ export interface BaseRichEntity<I extends IdBase = DefId, N = string> extends Ba
     $search?: unknown;
 }
 /**
- * Base service interface
+ * Repository interface
  * Generics:
  * - I: Id type
  * - E: Entity
- * - N: Name type (string or i18n)
  * - R: Request
  * - F: Filter
  * */
-export interface BaseRepo<I extends IdBase, N, E extends BaseEntity<I, N>, R = XX, F = XX> {
+export interface RepositoryLike<I extends ID, E extends EntityLike<I>, R = XX, F = XX> {
 
     // region create
     /**
@@ -121,7 +144,7 @@ export interface BaseRepo<I extends IdBase, N, E extends BaseEntity<I, N>, R = X
     /**
      * Tries to find aen entity with slug
      * */
-    findBySlug?(req: R, slug: I): Promise<E>;
+    findBySlug?(req: R, slug: string): Promise<E>;
 
     // endregion get
 
@@ -163,11 +186,10 @@ export interface BaseRepo<I extends IdBase, N, E extends BaseEntity<I, N>, R = X
     // endregion delete
 }
 /**
- * Base service interface
+ * Service interface
  * Generics:
  * - I: Id type
  * - E: Entity
- * - N: Name type (string or i18n)
  * - P: Pair
  * - V: View
  * - C: Create
@@ -175,50 +197,39 @@ export interface BaseRepo<I extends IdBase, N, E extends BaseEntity<I, N>, R = X
  * - R: Request
  * - F: Filter
  * */
-export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P extends BasePair<I> = BasePair<I>, V = BaseEntity<I, N>, C = BaseEntity<I, N>, U = BaseEntity<I, N>, R = XX, F = XX> {
+export type ServiceLike<I extends ID, E extends EntityLike<I>, P extends PairLike<I> = PairLike<I>, V = EntityLike<I>, C = EntityLike<I>, U = EntityLike<I>, R = XX, F = XX> =
+    ServiceBase<I, E, P, V, C, U, R, F> &
+    ServicePair<I, E, P, R> &
+    ServiceView<I, E, V, R> &
+    ServiceInternal<I, E, C, U, R, F>;
 
-    // region create
-    /**
-     * Creates/inserts an entity
-     * - It does not allow omitted properties
-     * - If existingId is provided then new id will not be generated, and existingId will be used for id
-     * */
-    $createOne?(req: R, dto: C, existingId?: I|Partial<P>|Partial<E>): Promise<E>;
+/**
+ * Service base interface
+ * Generics:
+ * - I: Id type
+ * - E: Entity
+ * - P: Pair
+ * - V: View
+ * - C: Create
+ * - U: Update
+ * - R: Request
+ * - F: Filter
+ * */
+interface ServiceBase<I extends ID, E extends EntityLike<I>, P extends PairLike<I>, V, C, U, R, F> {
+
     /**
      * It returns view object to hide original entity
      *
      * @see {@link $createOne}
      * */
     createOne?(req: R, dto: C): Promise<V>;
-
-    /**
-     * Prepares for insert
-     * - If id is null then it collects sample data before insert
-     * - If id is valid then it fetches original record, clear some sensitive data
-     *
-     * - If record does not exist then it raises not-found exception (if id is provided)
-     * @throws RecordNotFoundException
-     * */
-    $prepareById?(req: R, id: I|Partial<P>|Partial<E>): Promise<E>;
-
     /**
      * It returns view object to hide original entity
      *
      * @see {@link $prepareById}
      * */
     prepareById?(req: R, id?: I): Promise<V>;
-    // endregion create
 
-    // region update
-    /**
-     * Updates an entity
-     * - It does not allow omitted properties
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     *
-     * */
-    $updateById?(req: R, id: I|Partial<P>|Partial<E>, dto: U|Partial<E>): Promise<E>;
     /**
      * It returns view object to hide original entity
      *
@@ -226,46 +237,12 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * */
     updateById?(req: R, id: I, dto: U): Promise<V>;
     /**
-     * Updates an entity as partially
-     * - It does not allow omitted properties
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     *
-     * */
-    $setById?(req: R, id: I|Partial<P>|Partial<E>, dto: Partial<U>|Partial<E>): Promise<E>;
-    /**
      * It returns view object to hide original entity
      *
      * @see {@link $setById}
      * */
     setById?(req: R, id: I, dto: Partial<U>|Partial<E>): Promise<V>;
-    // endregion update
 
-    // region get
-    /**
-     * Tries to find a record with id
-     * - It validates and transforms id even if it is pair formatted {id, name, ...}
-     *
-     * When record is not found
-     * - If throwing then raises an exception
-     * - else returns undefined
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $lookById?(req: R, id: I|Partial<P>|Partial<E>, throwing?: boolean): Promise<E>;
-    /**
-     * Tries to find a record with id
-     *
-     * When record is not found
-     * - If throwing then raises an exception
-     * - else returns undefined
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $findById?(req: R, id: I|Partial<P>|Partial<E>): Promise<E>;
     /**
      * It returns view object to hide original entity
      *
@@ -273,30 +250,6 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * */
     findById?(req: R, id: I): Promise<V>;
 
-
-    /**
-     * Tries to find a record with slug
-     * - It validates and transforms id even if it is pair formatted {id, name, ...}
-     *
-     * When record is not found
-     * - If throwing then raises an exception
-     * - else returns undefined
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $lookBySlug?(req: R, slug: string|Partial<E>, throwing?: boolean): Promise<E>;
-    /**
-     * Tries to find a record with slug
-     *
-     * When record is not found
-     * - If throwing then raises an exception
-     * - else returns undefined
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $findBySlug?(req: R, slug: I|Partial<P>|Partial<E>): Promise<E>;
     /**
      * It returns view object to hide original entity
      *
@@ -304,19 +257,6 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * */
     findBySlug?(req: R, slug: string): Promise<V>;
 
-    // endregion get
-
-
-    // region list
-    /**
-     * Find more records with given conditions
-     *
-     * It supports;
-     * - where conditions
-     * - order by
-     * - limit offset
-     * */
-    $findByIds?(req: R, ids: Array<I|Partial<P>|Partial<E>>): Promise<Array<E>>;
     /**
      * Find more records with given conditions
      *
@@ -327,41 +267,18 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * */
     findByIds?(req: R, ids: Array<I>): Promise<Array<V>>;
     /**
-     * Find more records with given conditions
-     *
-     * It supports;
-     * - where conditions
-     * - order by
-     * - limit offset
-     * */
-    $findMore?(req: R, filter: F, options?: unknown): Promise<Array<E>>;
-    /**
      * It returns view object to hide original entity
      *
      * @see {@link $findMore}
      * */
     findMore?(req: R, filter: F, options?: unknown): Promise<Array<V>>;
-    // endregion list
 
-    // region delete
-    /**
-     * Deletes -hard- an entity with id
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $deleteById?(req: R, id: I|Partial<P>|Partial<E>): Promise<E>;
     /**
      * It returns view object to hide original entity
      *
      * @see {@link $deleteById}
      * */
-    deleteById(req: R, id: I): Promise<P>;
-    /**
-     * Deletes -hard- entities with ids
-     *
-     * */
-    $deleteByIds?(req: R, ids: Array<I|Partial<P>|Partial<E>>): Promise<number>;
+    deleteById?(req: R, id: I): Promise<P>;
     /**
      * It returns view object to hide original entity
      *
@@ -369,33 +286,28 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * */
     deleteByIds?(req: R, ids: Array<I>): Promise<number>;
     /**
-     * Trashes an entity with id (soft delete)
-     *
-     * - If record does not exist then it raises not-found exception
-     * @throws RecordNotFoundException
-     * */
-    $trashById?(req: R, id: I|Partial<P>|Partial<E>, trash?: unknown): Promise<E>;
-    /**
      * It returns view object to hide original entity
      *
      * @see {@link $trashById}
      * */
     trashById?(req: R, id: I, trash?: unknown): Promise<P>;
-
-    /**
-     * Trashes entities with ids (soft delete)
-     * */
-    $trashByIds?(req: R, ids: Array<I|Partial<P>|Partial<E>>, trash?: unknown): Promise<number>;
     /**
      * It returns view objects to hide original entity
      *
      * @see {@link $trashByIds}
      * */
     trashByIds?(req: R, ids: Array<I>, trash?: unknown): Promise<P>;
+}
 
-    // endregion delete
-
-    // region pair
+/**
+ * Service pair interface
+ * Generics:
+ * - I: Id type
+ * - E: Entity
+ * - P: Pair
+ * - R: Request
+ * */
+interface ServicePair<I extends ID, E extends EntityLike<I>, P extends PairLike<I>, R> {
     /**
      * Convert an entity to pair
      * */
@@ -432,10 +344,18 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * List pair list with given query
      * It can be used to fill combo, auto suggest etc
      * */
-    pairsMore(req: R, query?: string|unknown, limit?: number): Promise<Array<P>>;
-    // endregion pair
+    pairsMore?(req: R, query?: string|unknown, limit?: number): Promise<Array<P>>;
+}
 
-    // region view
+/**
+ * Service view interface
+ * Generics:
+ * - I: Id type
+ * - E: Entity
+ * - V: View
+ * - R: Request
+ * */
+interface ServiceView<I extends ID, E extends EntityLike<I>, V, R> {
     /**
      * Convert an entity to a view
      * */
@@ -444,5 +364,146 @@ export interface BaseService<I extends IdBase, N, E extends BaseEntity<I, N>, P 
      * Convert entities to views
      * */
     toViews?(req: R, docs: Array<E>, variant?: string): Promise<Array<V>>;
-    // endregion view
+    /**
+     * Convert a view to an entity
+     * */
+    fromView?(req: R, view: V): Promise<E>;
+    /**
+     * Convert views to entities
+     * */
+    fromViews?(req: R, views: Array<V>): Promise<Array<E>>;
+}
+
+/**
+ * Service internal interface
+ * Generics:
+ * - I: Id type
+ * - E: Entity
+ * - C: Create
+ * - U: Update
+ * - R: Request
+ * - F: Filter
+ * */
+interface ServiceInternal<I extends ID, E extends EntityLike<I>, C, U, R, F> {
+
+    /**
+     * Creates/inserts an entity
+     * - It does not allow omitted properties
+     * - If existingId is provided then new id will not be generated, and existingId will be used for id
+     * */
+    $createOne?(req: R, dto: C, existingId?: GivenId<I>): Promise<E>;
+    /**
+     * Prepares for insert
+     * - If id is null then it collects sample data before insert
+     * - If id is valid then it fetches original record, clear some sensitive data
+     *
+     * - If record does not exist then it raises not-found exception (if id is provided)
+     * @throws RecordNotFoundException
+     * */
+    $prepareById?(req: R, id: GivenId<I>): Promise<E>;
+    /**
+     * Updates an entity
+     * - It does not allow omitted properties
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     *
+     * */
+    $updateById?(req: R, id: GivenId<I>, dto: U|Partial<E>): Promise<E>;
+    /**
+     * Updates an entity as partially
+     * - It does not allow omitted properties
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     *
+     * */
+    $setById?(req: R, id: GivenId<I>, dto: Partial<U>|Partial<E>): Promise<E>;
+    /**
+     * Tries to find a record with id
+     * - It validates and transforms id even if it is pair formatted {id, name, ...}
+     *
+     * When record is not found
+     * - If throwing then raises an exception
+     * - else returns undefined
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $lookById?(req: R, id: GivenId<I>, throwing?: boolean): Promise<E>;
+    /**
+     * Tries to find a record with id
+     *
+     * When record is not found
+     * - If throwing then raises an exception
+     * - else returns undefined
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $findById?(req: R, id: GivenId<I>): Promise<E>;
+    /**
+     * Tries to find a record with slug
+     * - It validates and transforms id even if it is pair formatted {id, name, ...}
+     *
+     * When record is not found
+     * - If throwing then raises an exception
+     * - else returns undefined
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $lookBySlug?(req: R, slug: string|Partial<E>, throwing?: boolean): Promise<E>;
+    /**
+     * Tries to find a record with slug
+     *
+     * When record is not found
+     * - If throwing then raises an exception
+     * - else returns undefined
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $findBySlug?(req: R, slug: string|Partial<E>): Promise<E>;
+    /**
+     * Find more records with given conditions
+     *
+     * It supports;
+     * - where conditions
+     * - order by
+     * - limit offset
+     * */
+    $findByIds?(req: R, ids: GivenIds<I>): Promise<Array<E>>;
+    /**
+     * Find more records with given conditions
+     *
+     * It supports;
+     * - where conditions
+     * - order by
+     * - limit offset
+     * */
+    $findMore?(req: R, filter: F, options?: unknown): Promise<Array<E>>;
+    /**
+     * Deletes -hard- an entity with id
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $deleteById?(req: R, id: GivenId<I>): Promise<E>;
+    /**
+     * Deletes -hard- entities with ids
+     *
+     * */
+    $deleteByIds?(req: R, ids: GivenIds<I>): Promise<number>;
+    /**
+     * Trashes an entity with id (soft delete)
+     *
+     * - If record does not exist then it raises not-found exception
+     * @throws RecordNotFoundException
+     * */
+    $trashById?(req: R, id: GivenId<I>, trash?: unknown): Promise<E>;
+    /**
+     * Trashes entities with ids (soft delete)
+     * */
+    $trashByIds?(req: R, ids: GivenIds<I>, trash?: unknown): Promise<number>;
 }
